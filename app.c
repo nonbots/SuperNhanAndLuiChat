@@ -42,15 +42,19 @@ int main(void) {
     initAsteroid(&asteroids[i]);
   }
 
+  int collisionCount = 0;
  // Main game loop
   while (!WindowShouldClose())    // Detect window close button or ESC key
   {
     BeginDrawing();
     ClearBackground((Color){0,255,0,255});
+    DrawText(TextFormat("%d", collisionCount), 20, 20, 10, BLUE);
     DrawTriangle(superNhan.v1, superNhan.v2, superNhan.v3, RED);
     for (int j = 0; j < asteroidsLength; j++) {
       updateAsteroid(&asteroids[j]);
-   //   CheckCollisionPointCircle(superNhan.v3, asteroids[j], float radius
+      if (CheckCollisionPointCircle(superNhan.v3, asteroids[j].center, asteroids[j].radius)){
+        collisionCount += 1; 
+      };
     }
 
     updateDriver(&superNhan);
