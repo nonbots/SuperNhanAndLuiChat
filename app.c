@@ -30,7 +30,10 @@ void initDriver(driver_t* ast);
 void updateDriver(driver_t* ast);
 
 int main(void) {
+  InitAudioDevice();
+  Sound explosion = LoadSound("Sound_Effects/explosion.wav");
   InitWindow(screenWidth, screenHeight, "raylib [shapes] example - basic shapes drawing");
+  SetWindowPosition(0,0);
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
   //create an array of asteroid instances 
@@ -53,6 +56,7 @@ int main(void) {
     for (int j = 0; j < asteroidsLength; j++) {
       updateAsteroid(&asteroids[j]);
       if (CheckCollisionPointCircle(superNhan.v3, asteroids[j].center, asteroids[j].radius)){
+        PlaySound(explosion);
         collisionCount += 1; 
       };
     }
@@ -62,6 +66,7 @@ int main(void) {
   }
 
   CloseWindow();        // Close window and OpenGL context
+  CloseAudioDevice();
   return 0;
 }
 
