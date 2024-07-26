@@ -1,183 +1,177 @@
 #include <stdio.h>
 #include "raylib.h"
-#define ASTEROIDSLENGTH 10
-#define BOSSLASERLENGTH 5
-#define SCREENWIDTH 500
-#define SCREENHEIGHT 500
+#define ASTEROIDS_LENGTH 10
+#define BOSS_LASERS_LENGTH 5
+#define DRIVER_LASERS_LENGTH 3
+#define SCREEN_WIDTH 500
+#define SCREEN_HEIGHT 500
 #define BOSS_TELEPORT_TIME 100
-#define BOSS_LIFECOUNT_TOTAL 10
-const int minSpeed = 1;
-const int maxSpeed = 10;
-const int minRadius = 5;
-const int maxRadius = 20;
-const int minXPosition = 0;
+#define BOSS_LIFE_COUNT_TOTAL 10
+//asteroids 
+#define MIN_SPEED 1
+#define MAX_SPEED 10
+#define MIN_RADIUS 5 
+#define MAX_RADIUS 10
+#define MIN_X_POSITION 0
+//laser
+#define LASER_SPEED 10
+//state enums
+typedef enum {
+  DEAD, 
+  ALIVE
+} PlayerStateType;
+
+typedef enum {
+  SPAWN,
+  SHOOT
+} LaserStateType;
+
 //asteroid struct
-typedef struct asteroid {
-  int radius;
+typedef struct {
+  float radius;
   Vector2 center;
-  int currentSpeed;
-} asteroid_t;
+  float speed;
+} AsteroidType;
 
-typedef struct laser {
-  Vector2 startPosition;
-  Vector2 endPosition;
-  int currentSpeed;
-} laser_t;
+typedef struct {
+  LaserStateType state;
+  Vector2 start_position;
+  Vector2 end_position;
+  float speed;
+} LaserType;
 
-typedef struct driver {
+typedef struct {
+  PlayerStateType state;
+  int life_count;
   Vector2 v1;
   Vector2 v2;
   Vector2 v3;
-  int currentSpeed;
-} driver_t;
+  float speed;
+} DriverType;
 
-typedef struct boss {
-  int radius; 
+typedef struct {
+  PlayerStateType state;
+  float radius; 
   Vector2 center;
-  int timeToTeleport;
-  int lifeCount;
-} boss_t;
+  float time_to_teleport;
+  int life_count;
+} BossType;
 
-typedef enum {
-  Dead, 
-  Alive
-} player_state_t;
 
-typedef enum {
-  Spawn,
-  Shoot
-} laser_state_t;
+typedef struct {
+  AsteroidType asteroids[ASTEROIDS_LENGTH];
+  LaserType driver_laser;
+  LaserType boss_lasers;
+  BossType boss;
+  DriverType driver;
+} GameEntityType;
 
-//create an array of asteroid instances 
-asteroid_t asteroids[ASTEROIDSLENGTH];
-//create an array of laser instances
-laser_t boss_lasers[BOSSLASERSLENGTH];
-player_state_t player_state = Alive;
-laser_state_t laser_state = Spawn;
-player_state_t boss_state = Alive;
+GameEntityType game_entity;
 
-void initAsteroid(asteroid_t* ast);
-void updateAsteroid(asteroid_t* ast);
-void respawnAsteroid(asteroid_t*ast);
-void initBoss(boss_t* boss, Vector2 bossCenter);
-//void initDriver(driver_t* ast);
-void updateDriver(driver_t* ast);
-void initAlive(int* collisionCount, int* livesCount, Sound explosion, Sound shoot, Vector2 bossCenter);
-
-laser_t laser = {}; 
-//create an instance of driver 
-driver_t superNhan = {
-  {(SCREENWIDTH/2) - 10, SCREENHEIGHT/2},  
-  {(SCREENWIDTH/2) + 10, SCREENHEIGHT/2},
-  {SCREENWIDTH/2, (SCREENHEIGHT/2) - 10}
-};
-
-boss_t boss = {};
+void init_driver(DriverType* driver);
+void update_driver(DriverType* driver);
+void init_asteroids(AsteroidType* asteroids);
+void update_asteroids(AsteroidType* asteroids);
+void respawn_asteroids(AsteroidType* asteroids);
+void init_boss(BossType* boss);
+void respawn_boss(BossType* boss);
+void respawn_driver_laser(LaserType* driver_laser, DriverType* driver);
+void shoot_driver_laser(LaserType* driver_laser);
 
 int main(void) {
   InitAudioDevice();
   Sound explosion = LoadSound("SoundEffects/explosion.wav");
   Sound shoot = LoadSound("SoundEffects/laserShoot.wav");
   Sound bossExplosion = LoadSound("SoundEffects/bossExplosion.wav");
-  SetSoundVolume(explosion, 0.1);
-  SetSoundVolume(bossExplosion, 0.5);
-  SetSoundVolume(shoot, 0.5);
-  InitWindow(SCREENWIDTH, SCREENHEIGHT, "SuperNhanAndLuiChat");
+  SetSoundVolume(explosion, 0.1f);
+  SetSoundVolume(bossExplosion, 0.5f);
+  SetSoundVolume(shoot, 0.5f);
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "SuperNhanAndLuiChat");
   SetWindowPosition(0,0);
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
-  //loop through asteroids to init each asteroid
-  for (int i = 0; i < ASTEROIDSLENGTH; i++) {
-    initAsteroid(&asteroids[i]);
-  }
+  init_driver(&game_entity.driver);
+
+  //this a pointer that point to the first struct 
+  init_asteroids(game_entity.asteroids);
+
+  init_boss(&game_entity.boss);
 
   int collisionCount = 0;
-  int livesCount = 3;
- // Main game loop
   bool isExit = false;
-  Vector2 bossCenter = {GetRandomValue(0, SCREENWIDTH),GetRandomValue(0, (SCREENHEIGHT/2) - 120)};
-    initBoss(&boss, bossCenter);
+  LaserType* driver_laser = &game_entity.driver_laser;
+  BossType* boss = &game_entity.boss;
+  DriverType* driver = &game_entity.driver;
+  AsteroidType* asteroids = game_entity.asteroids;
   while (!WindowShouldClose() && !isExit)    // Detect window close button or ESC key
   {
-      BeginDrawing();
-      ClearBackground(BLACK);
-      DrawText(TextFormat("%d", collisionCount), 20, 20, 10, BLUE);
-      DrawText(TextFormat("%d", livesCount), 40, 20, 10, RED);
-      DrawText(TextFormat("%d", boss.timeToTeleport), 60, 20, 10, PURPLE);
-      DrawText(TextFormat("%d", boss.lifeCount), 80, 20, 10, PURPLE);
-    switch (player_state) {
-      case Alive : 
-        if (boss_state == Alive) {
-          boss.timeToTeleport -= 1;
-          DrawCircle(boss.center.x, boss.center.y, boss.radius, PURPLE);
-          if (boss.timeToTeleport == 0) {
-            //get new random position for the boss
-            boss.center.x = GetRandomValue(0, SCREENWIDTH);
-            boss.center.y = GetRandomValue(100, (SCREENHEIGHT/2) - 120);
-            boss.timeToTeleport = 200;
-          }
-          if (CheckCollisionPointCircle(laser.startPosition, boss.center, boss.radius)) {
-            PlaySound(bossExplosion);
-            boss.lifeCount -= 1;
-            boss.center.x = GetRandomValue(0, SCREENWIDTH);
-            boss.center.y = GetRandomValue(100, (SCREENHEIGHT/2) - 120);
-          };
-          if (boss.lifeCount == 0) boss_state = Dead;
-        }
-        if (laser_state == Spawn) {
-          laser.startPosition = superNhan.v3;
-          laser.endPosition.x = superNhan.v3.x;
-          laser.endPosition.y = superNhan.v3.y + 10;
-          if (IsKeyPressed(KEY_A)) {
-            PlaySound(shoot);
-            laser_state = Shoot;
-          }
-        }
-        if(laser_state == Shoot) {
-           laser.startPosition.y -= 10;
-           laser.endPosition.y -= 10;
-           if (laser.endPosition.y == 0) laser_state = Spawn;
-        }
-        DrawTriangle(superNhan.v1, superNhan.v2, superNhan.v3, RED);
-        DrawLineV(laser.startPosition, laser.endPosition, GREEN);
-        for (int j = 0; j < ASTEROIDSLENGTH; j++) {
-          updateAsteroid(&asteroids[j]);
-          if (CheckCollisionPointCircle(superNhan.v3, asteroids[j].center, asteroids[j].radius)){
+    BeginDrawing();
+    ClearBackground(BLACK);
+    DrawText(TextFormat("%d", collisionCount), 20, 20, 10, BLUE);
+    DrawText(TextFormat("%d", driver->life_count), 40, 20, 10, RED);
+    DrawText(TextFormat("%d", boss->time_to_teleport), 60, 20, 10, PURPLE);
+    DrawText(TextFormat("%d", boss->life_count), 80, 20, 10, PURPLE);
+    switch (driver->state) {
+      case ALIVE : 
+
+        update_asteroids(game_entity.asteroids);
+        update_driver(&game_entity.driver);
+
+        //for loop through astroids 
+        for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
+          if (CheckCollisionPointCircle(driver->v3, asteroids[i].center, asteroids[i].radius)){
             PlaySound(explosion);
             collisionCount += 1; 
-            livesCount -= 1;
-            respawnAsteroid(&asteroids[j]);
+            driver->life_count -= 1;
+            respawn_asteroids(&asteroids[i]);
           };
-          if (CheckCollisionPointCircle(laser.startPosition, asteroids[j].center, asteroids[j].radius)){
-            respawnAsteroid(&asteroids[j]);
-            laser_state = Spawn;
+
+          if (CheckCollisionPointCircle(driver_laser->start_position, asteroids[i].center, asteroids[i].radius)){
+            respawn_asteroids(&asteroids[i]);
+            driver_laser->state = SPAWN;
           }
-        if (livesCount == 0) player_state = Dead;
         }
-        updateDriver(&superNhan);
-        //decrement timer 
-        //if timer is at zero 
-          //respawn the boss at random position 
-          //reset timer 
-        //check for collision between laser and boss
-          //decrement the bossLifeCounter
-        //if the bossLifeCounter is equal 0
-          //set the state of the bose to be dead 
+
+        if (driver->life_count == 0) driver->state = DEAD;
+        if (boss->state == ALIVE) {
+          boss->time_to_teleport -= 1;
+          if (boss->time_to_teleport == 0) {
+            boss->time_to_teleport = 200;
+            respawn_boss(&game_entity.boss);
+          }
+          if (CheckCollisionPointCircle(driver_laser->start_position,  boss->center, boss->radius)) {
+            PlaySound(bossExplosion);
+            boss->life_count -= 1;
+            respawn_boss(&game_entity.boss);
+          };
+          if (boss->life_count == 0) boss->state = DEAD;
+        }
+        if (driver_laser->state == SPAWN) {
+          respawn_driver_laser(&game_entity.driver_laser, &game_entity.driver);
+          if (IsKeyPressed(KEY_A)) {
+            PlaySound(shoot);
+            driver_laser->state = SHOOT;
+          }
+        }
+        if(driver_laser->state == SHOOT) {
+          shoot_driver_laser(&game_entity.driver_laser);
+           if (driver_laser->end_position.y == 0) driver_laser->state = SPAWN;
+        }
+        
         break;
-      case Dead:
-        DrawText(TextFormat("GAME OVER"), 100, SCREENHEIGHT/2, 50, ORANGE);
-        DrawText(TextFormat("Press [R] to Restart"), 100, (SCREENHEIGHT/2) + 50, 20, ORANGE);
-        DrawText(TextFormat("Press [E] to Exit"), 100, (SCREENHEIGHT/2) + 100, 20, ORANGE);
+      case DEAD:
+        DrawText(TextFormat("GAME OVER"), 100, SCREEN_HEIGHT/2, 50, ORANGE);
+        DrawText(TextFormat("Press [R] to Restart"), 100, (SCREEN_HEIGHT/2) + 50, 20, ORANGE);
+        DrawText(TextFormat("Press [E] to Exit"), 100, (SCREEN_HEIGHT/2) + 100, 20, ORANGE);
         if (IsKeyPressed(KEY_E)) isExit = true; 
         if (IsKeyPressed(KEY_R)) {
-          player_state = Alive;
+          driver->state = ALIVE;
           collisionCount = 0;
-          livesCount = 3;
-          bossCenter.x = GetRandomValue(0, SCREENWIDTH);
-          bossCenter.y = GetRandomValue(100, (SCREENHEIGHT/2) - 120);
-          boss.lifeCount = BOSS_LIFECOUNT_TOTAL;
-          //printf("RANDOMY: %d", randomY);
-          //printf("RANDOMX: %d", randomX);
+          driver->state = 3;
+          boss->center.x = (float)GetRandomValue(0, SCREEN_WIDTH);
+          boss->center.y = (float)GetRandomValue(100, (SCREEN_HEIGHT/2) - 120);
+          boss->life_count = BOSS_LIFE_COUNT_TOTAL;
+          boss->state = ALIVE;
         }
         break;
     }
@@ -189,44 +183,75 @@ int main(void) {
   return 0;
 }
 
-void initBoss (boss_t* boss, Vector2 bossCenter) {
-  boss->radius = 30;
-  boss->center.x = bossCenter.x;
-  boss->center.y = bossCenter.y;
-  boss->timeToTeleport = BOSS_TELEPORT_TIME;
-  boss->lifeCount = BOSS_LIFECOUNT_TOTAL;
+void shoot_driver_laser(LaserType* driver_laser) {
+   driver_laser->start_position.y -= LASER_SPEED;
+   driver_laser->end_position.y -= LASER_SPEED;
 }
 
-void updateDriver(driver_t* super) {
+void respawn_driver_laser(LaserType* driver_laser, DriverType* driver) {
+  driver_laser->start_position = driver->v3;
+  driver_laser->end_position.x = driver->v3.x;
+  driver_laser->end_position.y = driver->v3.y + 10;
+  DrawLineV(driver_laser->start_position, driver_laser->end_position, GREEN);
+}
+void respawn_boss(BossType* boss) {
+  boss->center.x = (float)GetRandomValue(0, SCREEN_WIDTH);
+  boss->center.y = (float)GetRandomValue(100, (SCREEN_HEIGHT/2) - 120);
+}
+
+void init_driver(DriverType* driver) {
+  driver->state = ALIVE; 
+  driver->life_count = 3;
+  driver->v1 = (Vector2){(SCREEN_WIDTH/2) - 10, SCREEN_HEIGHT/2};
+  driver->v2 = (Vector2){(SCREEN_WIDTH/2) + 10, SCREEN_HEIGHT/2};
+  driver->v3 = (Vector2){SCREEN_WIDTH/2, (SCREEN_HEIGHT/2) - 10};
+  driver->speed = 1;
+  DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
+}
+void init_boss (BossType* boss) {
+  boss->radius = 30;
+  boss->center = (Vector2){(float)GetRandomValue(0, SCREEN_WIDTH), (float)GetRandomValue(0, (SCREEN_HEIGHT/2) - 120)};
+  boss->time_to_teleport = BOSS_TELEPORT_TIME;
+  boss->life_count = BOSS_LIFE_COUNT_TOTAL;
+  DrawCircle((int)boss->center.x, (int)boss->center.y, boss->radius, PURPLE);
+}
+
+void update_driver(DriverType* driver) {
   if (IsKeyDown(KEY_H)) {
-    super->v1.x -= 1;
-    super->v2.x -= 1;
-    super->v3.x -= 1;
+    driver->v1.x -= driver->speed;
+    driver->v2.x -= driver->speed;
+    driver->v3.x -= driver->speed;
   }
   if (IsKeyDown(KEY_L)) {
-    super->v1.x += 1;
-    super->v2.x += 1;
-    super->v3.x += 1;
+    driver->v1.x += driver->speed;
+    driver->v2.x += driver->speed;
+    driver->v3.x += driver->speed;
   }
 }
 
-void initAsteroid(asteroid_t* ast) {
-  ast->radius = GetRandomValue(minRadius, maxRadius);
-  ast->center.x = GetRandomValue(minXPosition, SCREENWIDTH);
-  ast->center.y = 0;
-  ast->currentSpeed = GetRandomValue(minSpeed,maxSpeed);
-}
-void updateAsteroid(asteroid_t* ast) {
-  if (ast->center.y >= SCREENHEIGHT + ast->radius) {
-    respawnAsteroid(ast);
+void init_asteroids(AsteroidType* asteroids) {
+  //loop through asteroids to init each asteroid
+  for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
+    asteroids[i].radius = (float)GetRandomValue(MIN_RADIUS, MAX_RADIUS);
+    asteroids[i].center.x = (float)GetRandomValue(MIN_X_POSITION, SCREEN_WIDTH);
+    asteroids[i].center.y = 0;
+    asteroids[i].speed = (float)GetRandomValue(MIN_SPEED, MAX_SPEED);
   }
-  ast->center.y = ast->center.y + ast->currentSpeed;
-  DrawCircle(ast->center.x, ast->center.y, ast->radius, (Color){102, 153, 204, 255});
 }
 
-void respawnAsteroid(asteroid_t* ast) {
-  ast->center.x = GetRandomValue(minXPosition, SCREENWIDTH);
-  ast->center.y = 0 - 20;
-  ast->radius = GetRandomValue(minRadius, maxRadius);
-  ast->currentSpeed = GetRandomValue(minSpeed, maxSpeed);
+void update_asteroids(AsteroidType* asteroids) {
+  for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
+    asteroids[i].center.y = asteroids[i].center.y + asteroids[i].speed;
+    if (asteroids[i].center.y >= SCREEN_HEIGHT + asteroids[i].radius) {
+      respawn_asteroids(&asteroids[i]);
+    }
+    DrawCircle((int)asteroids[i].center.x, (int)asteroids[i].center.y, asteroids[i].radius, (Color){102, 153, 204, 255});
+  }
+}
+
+void respawn_asteroids(AsteroidType* asteroid) {
+  asteroid->center.x = (float)GetRandomValue(MIN_X_POSITION, SCREEN_WIDTH);
+  asteroid->center.y = 0 - 20;
+  asteroid->radius = (float)GetRandomValue(MIN_RADIUS, MAX_RADIUS);
+  asteroid->speed = (float)GetRandomValue(MIN_SPEED, MAX_SPEED);
 }
