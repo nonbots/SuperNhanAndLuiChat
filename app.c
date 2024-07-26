@@ -53,7 +53,7 @@ typedef struct {
   PlayerStateType state;
   float radius; 
   Vector2 center;
-  float time_to_teleport;
+  int time_to_teleport;
   int life_count;
 } BossType;
 
@@ -77,6 +77,8 @@ void init_boss(BossType* boss);
 void respawn_boss(BossType* boss);
 void respawn_driver_laser(LaserType* driver_laser, DriverType* driver);
 void shoot_driver_laser(LaserType* driver_laser);
+void update_boss(BossType* boss);
+
 
 int main(void) {
   InitAudioDevice();
@@ -90,19 +92,18 @@ int main(void) {
   SetWindowPosition(0,0);
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
-  init_driver(&game_entity.driver);
-
-  //this a pointer that point to the first struct 
-  init_asteroids(game_entity.asteroids);
-
-  init_boss(&game_entity.boss);
-
   int collisionCount = 0;
   bool isExit = false;
   LaserType* driver_laser = &game_entity.driver_laser;
   BossType* boss = &game_entity.boss;
   DriverType* driver = &game_entity.driver;
   AsteroidType* asteroids = game_entity.asteroids;
+
+  init_driver(driver);
+  //this a pointer that point to the first struct 
+  init_asteroids(asteroids);
+  init_boss(boss);
+
   while (!WindowShouldClose() && !isExit)    // Detect window close button or ESC key
   {
     BeginDrawing();
@@ -112,10 +113,10 @@ int main(void) {
     DrawText(TextFormat("%d", boss->time_to_teleport), 60, 20, 10, PURPLE);
     DrawText(TextFormat("%d", boss->life_count), 80, 20, 10, PURPLE);
     switch (driver->state) {
-      case ALIVE : 
 
-        update_asteroids(game_entity.asteroids);
-        update_driver(&game_entity.driver);
+      case ALIVE : 
+        update_asteroids(asteroids);
+        update_driver(driver);
 
         //for loop through astroids 
         for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
@@ -134,6 +135,7 @@ int main(void) {
 
         if (driver->life_count == 0) driver->state = DEAD;
         if (boss->state == ALIVE) {
+          update_boss(boss);
           boss->time_to_teleport -= 1;
           if (boss->time_to_teleport == 0) {
             boss->time_to_teleport = 200;
@@ -157,8 +159,8 @@ int main(void) {
           shoot_driver_laser(&game_entity.driver_laser);
            if (driver_laser->end_position.y == 0) driver_laser->state = SPAWN;
         }
-        
         break;
+
       case DEAD:
         DrawText(TextFormat("GAME OVER"), 100, SCREEN_HEIGHT/2, 50, ORANGE);
         DrawText(TextFormat("Press [R] to Restart"), 100, (SCREEN_HEIGHT/2) + 50, 20, ORANGE);
@@ -167,9 +169,8 @@ int main(void) {
         if (IsKeyPressed(KEY_R)) {
           driver->state = ALIVE;
           collisionCount = 0;
-          driver->state = 3;
-          boss->center.x = (float)GetRandomValue(0, SCREEN_WIDTH);
-          boss->center.y = (float)GetRandomValue(100, (SCREEN_HEIGHT/2) - 120);
+          driver->life_count = 3;
+          boss->life_count = ALIVE;
           boss->life_count = BOSS_LIFE_COUNT_TOTAL;
           boss->state = ALIVE;
         }
@@ -184,8 +185,9 @@ int main(void) {
 }
 
 void shoot_driver_laser(LaserType* driver_laser) {
-   driver_laser->start_position.y -= LASER_SPEED;
-   driver_laser->end_position.y -= LASER_SPEED;
+  driver_laser->start_position.y -= LASER_SPEED;
+  driver_laser->end_position.y -= LASER_SPEED;
+  DrawLineV(driver_laser->start_position, driver_laser->end_position, GREEN);
 }
 
 void respawn_driver_laser(LaserType* driver_laser, DriverType* driver) {
@@ -197,6 +199,7 @@ void respawn_driver_laser(LaserType* driver_laser, DriverType* driver) {
 void respawn_boss(BossType* boss) {
   boss->center.x = (float)GetRandomValue(0, SCREEN_WIDTH);
   boss->center.y = (float)GetRandomValue(100, (SCREEN_HEIGHT/2) - 120);
+  DrawCircle((int)boss->center.x, (int)boss->center.y, boss->radius, PURPLE);
 }
 
 void init_driver(DriverType* driver) {
@@ -209,10 +212,15 @@ void init_driver(DriverType* driver) {
   DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
 }
 void init_boss (BossType* boss) {
+  boss->state = ALIVE;
   boss->radius = 30;
   boss->center = (Vector2){(float)GetRandomValue(0, SCREEN_WIDTH), (float)GetRandomValue(0, (SCREEN_HEIGHT/2) - 120)};
   boss->time_to_teleport = BOSS_TELEPORT_TIME;
   boss->life_count = BOSS_LIFE_COUNT_TOTAL;
+  DrawCircle((int)boss->center.x, (int)boss->center.y, boss->radius, PURPLE);
+}
+void update_boss (BossType* boss) {
+  boss->center = boss->center;
   DrawCircle((int)boss->center.x, (int)boss->center.y, boss->radius, PURPLE);
 }
 
@@ -227,6 +235,7 @@ void update_driver(DriverType* driver) {
     driver->v2.x += driver->speed;
     driver->v3.x += driver->speed;
   }
+  DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
 }
 
 void init_asteroids(AsteroidType* asteroids) {
