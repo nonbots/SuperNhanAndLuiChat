@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include "raylib.h"
 #define ASTEROIDS_LENGTH 10
 #define BOSS_LASERS_LENGTH 5
@@ -43,10 +44,16 @@ typedef struct {
 typedef struct {
   PlayerStateType state;
   int life_count;
+  float radius;
   Vector2 v1;
   Vector2 v2;
   Vector2 v3;
+  Vector2 center;
+  float rotation_v1;
+  float rotation_v2;
+  float rotation_v3;
   float speed;
+  float rotation_speed;
 } DriverType;
 
 typedef struct {
@@ -67,7 +74,7 @@ typedef struct {
 } GameEntityType;
 
 GameEntityType game_entity;
-
+Vector2 get_driver_vertex (DriverType* driver, int degrees);
 void init_driver(DriverType* driver);
 void update_driver(DriverType* driver);
 void init_asteroids(AsteroidType* asteroids);
@@ -120,7 +127,11 @@ int main(void) {
 
         //for loop through astroids 
         for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
-          if (CheckCollisionPointCircle(driver->v3, asteroids[i].center, asteroids[i].radius)){
+          bool is_collision_v1 = CheckCollisionPointCircle(driver->v3, asteroids[i].center, asteroids[i].radius);
+          bool is_collision_v2 = CheckCollisionPointCircle(driver->v1, asteroids[i].center, asteroids[i].radius);
+          bool is_collision_v3 = CheckCollisionPointCircle(driver->v3, asteroids[i].center, asteroids[i].radius);
+
+          if (is_collision_v1 || is_collision_v2 || is_collision_v3){
             PlaySound(explosion);
             collisionCount += 1; 
             driver->life_count -= 1;
@@ -157,7 +168,7 @@ int main(void) {
         }
         if(driver_laser->state == SHOOT) {
           shoot_driver_laser(&game_entity.driver_laser);
-           if (driver_laser->end_position.y == 0) driver_laser->state = SPAWN;
+           if (driver_laser->end_position.y <= 0) driver_laser->state = SPAWN;
         }
         break;
 
@@ -205,15 +216,21 @@ void respawn_boss(BossType* boss) {
 void init_driver(DriverType* driver) {
   driver->state = ALIVE; 
   driver->life_count = 3;
-  driver->v1 = (Vector2){(SCREEN_WIDTH/2) - 10, SCREEN_HEIGHT/2};
-  driver->v2 = (Vector2){(SCREEN_WIDTH/2) + 10, SCREEN_HEIGHT/2};
-  driver->v3 = (Vector2){SCREEN_WIDTH/2, (SCREEN_HEIGHT/2) - 10};
+  driver->center = (Vector2){SCREEN_WIDTH/2 , SCREEN_HEIGHT/2};
+  driver->radius = 10;
   driver->speed = 1;
+  driver->rotation_speed = 1;
+  driver->rotation_v1 = 270;
+  driver->rotation_v2 = 150;
+  driver->rotation_v3 = 30;
+  driver->v1 = get_driver_vertex(driver, driver->rotation_v1);
+  driver->v2 = get_driver_vertex(driver, driver->rotation_v2);
+  driver->v3 = get_driver_vertex(driver, driver->rotation_v3);
   DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
 }
 void init_boss (BossType* boss) {
   boss->state = ALIVE;
-  boss->radius = 30;
+  boss->radius = 50;
   boss->center = (Vector2){(float)GetRandomValue(0, SCREEN_WIDTH), (float)GetRandomValue(0, (SCREEN_HEIGHT/2) - 120)};
   boss->time_to_teleport = BOSS_TELEPORT_TIME;
   boss->life_count = BOSS_LIFE_COUNT_TOTAL;
@@ -226,18 +243,45 @@ void update_boss (BossType* boss) {
 
 void update_driver(DriverType* driver) {
   if (IsKeyDown(KEY_H)) {
-    driver->v1.x -= driver->speed;
-    driver->v2.x -= driver->speed;
-    driver->v3.x -= driver->speed;
+    driver->center.x -= driver->speed;
   }
   if (IsKeyDown(KEY_L)) {
-    driver->v1.x += driver->speed;
-    driver->v2.x += driver->speed;
-    driver->v3.x += driver->speed;
+    driver->center.x += driver->speed;
   }
+  if (IsKeyDown(KEY_S)) { // rotate left
+    if ((int)driver->rotation_v1 % 360 == 0) driver->rotation_v1 = 0;
+    if ((int)driver->rotation_v2 % 360 == 0) driver->rotation_v2 = 0;
+    if ((int)driver->rotation_v3 % 360 == 0) driver->rotation_v3 = 0;
+    driver->rotation_v1 += driver->rotation_speed;     
+    driver->rotation_v2 += driver->rotation_speed;     
+    driver->rotation_v3 += driver->rotation_speed;     
+  }
+  if (IsKeyDown(KEY_D)) { // rotate right
+    if ((int)driver->rotation_v1 % 360 == 0) driver->rotation_v1 = 360;
+    if ((int)driver->rotation_v2 % 360 == 0) driver->rotation_v2 = 360;
+    if ((int)driver->rotation_v3 % 360 == 0) driver->rotation_v3 = 360;
+    driver->rotation_v1 -= driver->rotation_speed;     
+    driver->rotation_v2 -= driver->rotation_speed;     
+    driver->rotation_v3 -= driver->rotation_speed;     
+  }
+  driver->v1 = get_driver_vertex(driver, driver->rotation_v1);
+  driver->v2 = get_driver_vertex(driver, driver->rotation_v2);
+  driver->v3 = get_driver_vertex(driver, driver->rotation_v3);
+
+  printf("x: %f y: %f\n", driver->v1.x, driver->v1.y);
+  printf("x: %f y: %f\n", driver->v2.x, driver->v2.y);
+  printf("x: %f y: %f\n", driver->v3.x, driver->v3.y);
+  printf("rotation_v1: %f\n", driver->rotation_v1);
+  printf("rotation_v2: %f\n", driver->rotation_v2);
+  printf("rotation_v3: %f\n", driver->rotation_v3);
   DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
 }
 
+Vector2 get_driver_vertex (DriverType* driver, int degrees) {
+  float cosx = (float)cos(degrees * (PI/180));
+  float siny = (float)sin(degrees * (PI/180));
+  return (Vector2){driver->center.x + (driver->radius * cosx), driver->center.y + (driver->radius * siny)};
+}
 void init_asteroids(AsteroidType* asteroids) {
   //loop through asteroids to init each asteroid
   for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
