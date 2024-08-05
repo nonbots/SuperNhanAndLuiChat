@@ -74,7 +74,7 @@ typedef struct {
 } GameEntityType;
 
 GameEntityType game_entity;
-Vector2 get_driver_vertex (DriverType* driver, int degrees);
+Vector2 get_vector_from_pivot (Vector2 pivot, int degrees, float radius);
 void init_driver(DriverType* driver);
 void update_driver(DriverType* driver);
 void init_asteroids(AsteroidType* asteroids);
@@ -203,10 +203,10 @@ void shoot_driver_laser(LaserType* driver_laser) {
 
 void respawn_driver_laser(LaserType* driver_laser, DriverType* driver) {
   driver_laser->start_position = driver->v3;
-  driver_laser->end_position.x = driver->v3.x;
-  driver_laser->end_position.y = driver->v3.y + 10;
+  driver_laser->end_position = get_vector_from_pivot(driver->v3, driver->rotation_v3, 5);
   DrawLineV(driver_laser->start_position, driver_laser->end_position, GREEN);
 }
+
 void respawn_boss(BossType* boss) {
   boss->center.x = (float)GetRandomValue(0, SCREEN_WIDTH);
   boss->center.y = (float)GetRandomValue(100, (SCREEN_HEIGHT/2) - 120);
@@ -223,9 +223,9 @@ void init_driver(DriverType* driver) {
   driver->rotation_v1 = 270;
   driver->rotation_v2 = 150;
   driver->rotation_v3 = 30;
-  driver->v1 = get_driver_vertex(driver, driver->rotation_v1);
-  driver->v2 = get_driver_vertex(driver, driver->rotation_v2);
-  driver->v3 = get_driver_vertex(driver, driver->rotation_v3);
+  driver->v1 = get_vector_from_pivot(driver->center, driver->rotation_v1, driver->radius);
+  driver->v2 = get_vector_from_pivot(driver->center, driver->rotation_v2, driver->radius);
+  driver->v3 = get_vector_from_pivot(driver->center, driver->rotation_v3, driver->radius);
   DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
 }
 void init_boss (BossType* boss) {
@@ -264,9 +264,9 @@ void update_driver(DriverType* driver) {
     driver->rotation_v2 -= driver->rotation_speed;     
     driver->rotation_v3 -= driver->rotation_speed;     
   }
-  driver->v1 = get_driver_vertex(driver, driver->rotation_v1);
-  driver->v2 = get_driver_vertex(driver, driver->rotation_v2);
-  driver->v3 = get_driver_vertex(driver, driver->rotation_v3);
+  driver->v1 = get_vector_from_pivot(driver->center, driver->rotation_v1, driver->radius);
+  driver->v2 = get_vector_from_pivot(driver->center, driver->rotation_v2, driver->radius);
+  driver->v3 = get_vector_from_pivot(driver->center, driver->rotation_v3, driver->radius);
 
   printf("x: %f y: %f\n", driver->v1.x, driver->v1.y);
   printf("x: %f y: %f\n", driver->v2.x, driver->v2.y);
@@ -277,10 +277,10 @@ void update_driver(DriverType* driver) {
   DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
 }
 
-Vector2 get_driver_vertex (DriverType* driver, int degrees) {
+Vector2 get_vector_from_pivot (Vector2 pivot, int degrees, float radius ) {
   float cosx = (float)cos(degrees * (PI/180));
   float siny = (float)sin(degrees * (PI/180));
-  return (Vector2){driver->center.x + (driver->radius * cosx), driver->center.y + (driver->radius * siny)};
+  return (Vector2){pivot.x + (radius * cosx), pivot.y + (radius * siny)};
 }
 void init_asteroids(AsteroidType* asteroids) {
   //loop through asteroids to init each asteroid
@@ -291,7 +291,6 @@ void init_asteroids(AsteroidType* asteroids) {
     asteroids[i].speed = (float)GetRandomValue(MIN_SPEED, MAX_SPEED);
   }
 }
-
 void update_asteroids(AsteroidType* asteroids) {
   for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
     asteroids[i].center.y = asteroids[i].center.y + asteroids[i].speed;
