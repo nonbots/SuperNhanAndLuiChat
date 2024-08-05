@@ -7,6 +7,7 @@
 #define SCREEN_WIDTH 500
 #define SCREEN_HEIGHT 500
 #define BOSS_TELEPORT_TIME 100
+#define SPAWN_BOOSTER_COUNTER 600
 #define BOSS_LIFE_COUNT_TOTAL 10
 //asteroids 
 #define MIN_SPEED 1
@@ -64,6 +65,11 @@ typedef struct {
   int life_count;
 } BossType;
 
+typedef struct {
+  float radius;
+  Vector2 center;
+  float speed;
+} BoosterType;
 
 typedef struct {
   AsteroidType asteroids[ASTEROIDS_LENGTH];
@@ -71,9 +77,13 @@ typedef struct {
   LaserType boss_lasers;
   BossType boss;
   DriverType driver;
+  BoosterType booster;
 } GameEntityType;
 
 GameEntityType game_entity;
+void init_booster(BoosterType* booster);
+void boost_driver(DriverType* driver);
+void update_booster(BoosterType* booster);
 Vector2 get_vector_from_pivot (Vector2 pivot, int degrees, float radius);
 void init_driver(DriverType* driver);
 void update_driver(DriverType* driver);
@@ -99,18 +109,20 @@ int main(void) {
   SetWindowPosition(0,0);
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
+  int spawn_booster_counter = 400; 
   int collisionCount = 0;
   bool isExit = false;
   LaserType* driver_laser = &game_entity.driver_laser;
   BossType* boss = &game_entity.boss;
   DriverType* driver = &game_entity.driver;
   AsteroidType* asteroids = game_entity.asteroids;
+  BoosterType* booster = &game_entity.booster; 
 
   init_driver(driver);
   //this a pointer that point to the first struct 
   init_asteroids(asteroids);
   init_boss(boss);
-
+  init_booster(booster);
   while (!WindowShouldClose() && !isExit)    // Detect window close button or ESC key
   {
     BeginDrawing();
@@ -118,14 +130,29 @@ int main(void) {
     DrawText(TextFormat("%d", collisionCount), 20, 20, 10, BLUE);
     DrawText(TextFormat("%d", driver->life_count), 40, 20, 10, RED);
     DrawText(TextFormat("%d", boss->time_to_teleport), 60, 20, 10, PURPLE);
+    DrawText(TextFormat("Booster Spawn Counter %d", spawn_booster_counter), 60, 20, 10, PURPLE);
     DrawText(TextFormat("%d", boss->life_count), 80, 20, 10, PURPLE);
     switch (driver->state) {
 
       case ALIVE : 
+        spawn_booster_counter -= 1;
         update_asteroids(asteroids);
         update_driver(driver);
 
+        if (spawn_booster_counter == 0) {
+          init_booster(booster);
+          spawn_booster_counter = SPAWN_BOOSTER_COUNTER;
+        }
+        update_booster(booster);
         //for loop through astroids 
+        bool is_collision_driver_v1 = CheckCollisionPointCircle(driver->v1, booster->center, booster->radius);
+        bool is_collision_driver_v2 = CheckCollisionPointCircle(driver->v2, booster->center, booster->radius);
+        bool is_collision_driver_v3 = CheckCollisionPointCircle(driver->v3, booster->center, booster->radius);
+        if ( is_collision_driver_v1 || is_collision_driver_v2 || is_collision_driver_v3) {
+            booster->center = (Vector2){-booster->radius, -booster->radius};
+            booster->speed = 0;
+            boost_driver(driver);
+        }
         for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
           bool is_collision_v1 = CheckCollisionPointCircle(driver->v3, asteroids[i].center, asteroids[i].radius);
           bool is_collision_v2 = CheckCollisionPointCircle(driver->v1, asteroids[i].center, asteroids[i].radius);
@@ -161,7 +188,7 @@ int main(void) {
         }
         if (driver_laser->state == SPAWN) {
           respawn_driver_laser(&game_entity.driver_laser, &game_entity.driver);
-          if (IsKeyPressed(KEY_A)) {
+          if (IsKeyPressed(KEY_SPACE)) {
             PlaySound(shoot);
             driver_laser->state = SHOOT;
           }
@@ -183,6 +210,7 @@ int main(void) {
         if (IsKeyPressed(KEY_E)) isExit = true; 
         if (IsKeyPressed(KEY_R)) {
           driver->state = ALIVE;
+          driver->speed = 1;
           collisionCount = 0;
           driver->life_count = 3;
           boss->life_count = ALIVE;
@@ -199,6 +227,21 @@ int main(void) {
   return 0;
 }
 
+void init_booster(BoosterType* booster) {
+  booster->speed = 1;
+  booster->radius = 10;
+  float rand_x =GetRandomValue(booster->radius, SCREEN_WIDTH - booster-> radius);
+  float y = -booster->radius;
+  booster->center = (Vector2){rand_x, y};
+}
+
+void update_booster(BoosterType* booster) {
+  booster->center.y = booster->center.y += booster->speed; 
+  DrawCircle((int)booster->center.x, (int)booster->center.y, booster->radius, GREEN);
+}
+void boost_driver(DriverType* driver) {
+  driver->speed = 5;
+}
 void shoot_driver_laser(LaserType* driver_laser, float rotation) {
   driver_laser->start_position = driver_laser->end_position;
   driver_laser->end_position = get_vector_from_pivot(driver_laser->start_position, rotation, 5);
