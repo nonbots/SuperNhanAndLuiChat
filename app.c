@@ -168,7 +168,11 @@ int main(void) {
         }
         if(driver_laser->state == SHOOT) {
           shoot_driver_laser(&game_entity.driver_laser, driver->rotation_v3);
-           if (driver_laser->end_position.y <= 0) driver_laser->state = SPAWN;
+           bool overTop = driver_laser->end_position.y <= 0;
+           bool overBottom = driver_laser->end_position.y >= SCREEN_HEIGHT;
+           bool overLeft = driver_laser->end_position.x <= 0;
+           bool overRight = driver_laser->end_position.x >= SCREEN_WIDTH;
+           if (overTop || overBottom || overLeft || overRight) driver_laser->state = SPAWN;
         }
         break;
 
