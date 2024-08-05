@@ -83,7 +83,7 @@ void respawn_asteroids(AsteroidType* asteroids);
 void init_boss(BossType* boss);
 void respawn_boss(BossType* boss);
 void respawn_driver_laser(LaserType* driver_laser, DriverType* driver);
-void shoot_driver_laser(LaserType* driver_laser);
+void shoot_driver_laser(LaserType* driver_laser, float rotation);
 void update_boss(BossType* boss);
 
 
@@ -167,7 +167,7 @@ int main(void) {
           }
         }
         if(driver_laser->state == SHOOT) {
-          shoot_driver_laser(&game_entity.driver_laser);
+          shoot_driver_laser(&game_entity.driver_laser, driver->rotation_v3);
            if (driver_laser->end_position.y <= 0) driver_laser->state = SPAWN;
         }
         break;
@@ -195,9 +195,9 @@ int main(void) {
   return 0;
 }
 
-void shoot_driver_laser(LaserType* driver_laser) {
-  driver_laser->start_position.y -= LASER_SPEED;
-  driver_laser->end_position.y -= LASER_SPEED;
+void shoot_driver_laser(LaserType* driver_laser, float rotation) {
+  driver_laser->start_position = driver_laser->end_position;
+  driver_laser->end_position = get_vector_from_pivot(driver_laser->start_position, rotation, 5);
   DrawLineV(driver_laser->start_position, driver_laser->end_position, GREEN);
 }
 
@@ -209,7 +209,11 @@ void respawn_driver_laser(LaserType* driver_laser, DriverType* driver) {
 
 void respawn_boss(BossType* boss) {
   boss->center.x = (float)GetRandomValue(0, SCREEN_WIDTH);
-  boss->center.y = (float)GetRandomValue(100, (SCREEN_HEIGHT/2) - 120);
+  float y_position = GetRandomValue(boss->radius, SCREEN_HEIGHT - boss->radius); 
+  if (y_position > SCREEN_HEIGHT/2 - boss->radius * 2 && y_position < SCREEN_HEIGHT/2 + boss->radius * 2) {
+    y_position -= SCREEN_HEIGHT/2 - boss->radius * 4;
+  }
+  boss->center.y = y_position;
   DrawCircle((int)boss->center.x, (int)boss->center.y, boss->radius, PURPLE);
 }
 
@@ -230,8 +234,12 @@ void init_driver(DriverType* driver) {
 }
 void init_boss (BossType* boss) {
   boss->state = ALIVE;
-  boss->radius = 50;
-  boss->center = (Vector2){(float)GetRandomValue(0, SCREEN_WIDTH), (float)GetRandomValue(0, (SCREEN_HEIGHT/2) - 120)};
+  boss->radius = 25;
+  float y_position = GetRandomValue(boss->radius, SCREEN_HEIGHT - boss->radius); 
+  if (y_position > SCREEN_HEIGHT/2 - boss->radius * 2 && y_position < SCREEN_HEIGHT/2 + boss->radius * 2) {
+    y_position -= SCREEN_HEIGHT/2 - boss->radius * 4;
+  }
+  boss->center = (Vector2){(float)GetRandomValue(boss->radius * 2, SCREEN_WIDTH - boss->radius), y_position};
   boss->time_to_teleport = BOSS_TELEPORT_TIME;
   boss->life_count = BOSS_LIFE_COUNT_TOTAL;
   DrawCircle((int)boss->center.x, (int)boss->center.y, boss->radius, PURPLE);
@@ -248,7 +256,7 @@ void update_driver(DriverType* driver) {
   if (IsKeyDown(KEY_L)) {
     driver->center.x += driver->speed;
   }
-  if (IsKeyDown(KEY_S)) { // rotate left
+  if (IsKeyDown(KEY_D)) { // rotate right
     if ((int)driver->rotation_v1 % 360 == 0) driver->rotation_v1 = 0;
     if ((int)driver->rotation_v2 % 360 == 0) driver->rotation_v2 = 0;
     if ((int)driver->rotation_v3 % 360 == 0) driver->rotation_v3 = 0;
@@ -256,7 +264,7 @@ void update_driver(DriverType* driver) {
     driver->rotation_v2 += driver->rotation_speed;     
     driver->rotation_v3 += driver->rotation_speed;     
   }
-  if (IsKeyDown(KEY_D)) { // rotate right
+  if (IsKeyDown(KEY_S)) { // rotate left
     if ((int)driver->rotation_v1 % 360 == 0) driver->rotation_v1 = 360;
     if ((int)driver->rotation_v2 % 360 == 0) driver->rotation_v2 = 360;
     if ((int)driver->rotation_v3 % 360 == 0) driver->rotation_v3 = 360;
