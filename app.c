@@ -3,6 +3,7 @@
 #include "raylib.h"
 #define ASTEROIDS_LENGTH 10
 #define BOSS_LASERS_LENGTH 5
+#define DRIVER_LIVES 3
 #define DRIVER_LASERS_LENGTH 3
 #define SCREEN_WIDTH 500
 #define SCREEN_HEIGHT 500
@@ -40,11 +41,13 @@ typedef struct {
   Vector2 start_position;
   Vector2 end_position;
   float speed;
+  float rotation; 
+  Vector2 pivot;
 } LaserType;
 
 typedef struct {
   PlayerStateType state;
-  int life_count;
+  int lives;
   float radius;
   Vector2 v1;
   Vector2 v2;
@@ -62,7 +65,7 @@ typedef struct {
   float radius; 
   Vector2 center;
   int time_to_teleport;
-  int life_count;
+  int lives;
 } BossType;
 
 typedef struct {
@@ -84,7 +87,7 @@ GameEntityType game_entity;
 void init_booster(BoosterType* booster);
 void boost_driver(DriverType* driver);
 void update_booster(BoosterType* booster);
-Vector2 get_vector_from_pivot (Vector2 pivot, int degrees, float radius);
+Vector2 get_vector_from_pivot (Vector2 pivot, float degrees, float radius);
 void init_driver(DriverType* driver);
 void update_driver(DriverType* driver);
 void init_asteroids(AsteroidType* asteroids);
@@ -127,11 +130,12 @@ int main(void) {
   {
     BeginDrawing();
     ClearBackground(BLACK);
-    DrawText(TextFormat("%d", collisionCount), 20, 20, 10, BLUE);
-    DrawText(TextFormat("%d", driver->life_count), 40, 20, 10, RED);
-    DrawText(TextFormat("%d", boss->time_to_teleport), 60, 20, 10, PURPLE);
-    DrawText(TextFormat("Booster Spawn Counter %d", spawn_booster_counter), 60, 20, 10, PURPLE);
-    DrawText(TextFormat("%d", boss->life_count), 80, 20, 10, PURPLE);
+    DrawText(TextFormat("Ship Lives:%d", driver->lives), 20, 20, 10, PURPLE);
+    DrawText(TextFormat("Boss Lives:%d", boss->lives), 90, 20, 10, PURPLE);
+    DrawText(TextFormat("Boss Teleport Time:%d", boss->time_to_teleport), 20, 30, 10, PURPLE);
+    DrawText(TextFormat("Booster Spawn Time %d", spawn_booster_counter), 20, 40, 10, PURPLE);
+    DrawText(TextFormat("Ship Speed %f", driver->speed), 20, 50, 10, PURPLE);
+    DrawText(TextFormat("Ship Rotation Speed %f", driver->rotation_speed), 20, 60, 10, PURPLE);
     switch (driver->state) {
 
       case ALIVE : 
@@ -161,7 +165,7 @@ int main(void) {
           if (is_collision_v1 || is_collision_v2 || is_collision_v3){
             PlaySound(explosion);
             collisionCount += 1; 
-            driver->life_count -= 1;
+            driver->lives -= 1;
             respawn_asteroids(&asteroids[i]);
           };
 
@@ -171,7 +175,8 @@ int main(void) {
           }
         }
 
-        if (driver->life_count == 0) driver->state = DEAD;
+
+        if (driver->lives == 0) driver->state = DEAD;
         if (boss->state == ALIVE) {
           update_boss(boss);
           boss->time_to_teleport -= 1;
@@ -181,14 +186,16 @@ int main(void) {
           }
           if (CheckCollisionPointCircle(driver_laser->start_position,  boss->center, boss->radius)) {
             PlaySound(bossExplosion);
-            boss->life_count -= 1;
+            boss->lives -= 1;
             respawn_boss(&game_entity.boss);
           };
-          if (boss->life_count == 0) boss->state = DEAD;
+          if (boss->lives == 0) boss->state = DEAD;
         }
         if (driver_laser->state == SPAWN) {
           respawn_driver_laser(&game_entity.driver_laser, &game_entity.driver);
           if (IsKeyPressed(KEY_SPACE)) {
+            driver_laser->rotation = driver->rotation_v3;
+            driver_laser->pivot = driver->v3;
             PlaySound(shoot);
             driver_laser->state = SHOOT;
           }
@@ -211,10 +218,11 @@ int main(void) {
         if (IsKeyPressed(KEY_R)) {
           driver->state = ALIVE;
           driver->speed = 1;
+          driver->rotation_speed = 1; 
           collisionCount = 0;
-          driver->life_count = 3;
-          boss->life_count = ALIVE;
-          boss->life_count = BOSS_LIFE_COUNT_TOTAL;
+          driver->lives = 3;
+          boss->lives = ALIVE;
+          boss->lives = BOSS_LIFE_COUNT_TOTAL;
           boss->state = ALIVE;
         }
         break;
@@ -230,7 +238,7 @@ int main(void) {
 void init_booster(BoosterType* booster) {
   booster->speed = 1;
   booster->radius = 10;
-  float rand_x =GetRandomValue(booster->radius, SCREEN_WIDTH - booster-> radius);
+  float rand_x =  (float)GetRandomValue((int)booster->radius, SCREEN_WIDTH - (int)booster-> radius);
   float y = -booster->radius;
   booster->center = (Vector2){rand_x, y};
 }
@@ -240,11 +248,12 @@ void update_booster(BoosterType* booster) {
   DrawCircle((int)booster->center.x, (int)booster->center.y, booster->radius, GREEN);
 }
 void boost_driver(DriverType* driver) {
-  driver->speed = 5;
+  driver->speed += 1;
+  driver->rotation_speed += 1;
 }
-void shoot_driver_laser(LaserType* driver_laser, float rotation) {
+void shoot_driver_laser(LaserType* driver_laser) {
   driver_laser->start_position = driver_laser->end_position;
-  driver_laser->end_position = get_vector_from_pivot(driver_laser->start_position, rotation, 5);
+  driver_laser->end_position = get_vector_from_pivot(driver_laser->start_position, driver_laser->rotation, 5);
   DrawLineV(driver_laser->start_position, driver_laser->end_position, GREEN);
 }
 
@@ -256,7 +265,7 @@ void respawn_driver_laser(LaserType* driver_laser, DriverType* driver) {
 
 void respawn_boss(BossType* boss) {
   boss->center.x = (float)GetRandomValue(0, SCREEN_WIDTH);
-  float y_position = GetRandomValue(boss->radius, SCREEN_HEIGHT - boss->radius); 
+  float y_position = (float)GetRandomValue((int)boss->radius, SCREEN_HEIGHT - (int)boss->radius); 
   if (y_position > SCREEN_HEIGHT/2 - boss->radius * 2 && y_position < SCREEN_HEIGHT/2 + boss->radius * 2) {
     y_position -= SCREEN_HEIGHT/2 - boss->radius * 4;
   }
@@ -266,7 +275,7 @@ void respawn_boss(BossType* boss) {
 
 void init_driver(DriverType* driver) {
   driver->state = ALIVE; 
-  driver->life_count = 3;
+  driver->lives = 3;
   driver->center = (Vector2){SCREEN_WIDTH/2 , SCREEN_HEIGHT/2};
   driver->radius = 10;
   driver->speed = 1;
@@ -282,13 +291,13 @@ void init_driver(DriverType* driver) {
 void init_boss (BossType* boss) {
   boss->state = ALIVE;
   boss->radius = 25;
-  float y_position = GetRandomValue(boss->radius, SCREEN_HEIGHT - boss->radius); 
+  float y_position = (float)GetRandomValue((int)boss->radius, SCREEN_HEIGHT - (int)boss->radius); 
   if (y_position > SCREEN_HEIGHT/2 - boss->radius * 2 && y_position < SCREEN_HEIGHT/2 + boss->radius * 2) {
     y_position -= SCREEN_HEIGHT/2 - boss->radius * 4;
   }
-  boss->center = (Vector2){(float)GetRandomValue(boss->radius * 2, SCREEN_WIDTH - boss->radius), y_position};
+  boss->center = (Vector2){(float)GetRandomValue((int)boss->radius * 2, SCREEN_WIDTH - (int)boss->radius), y_position};
   boss->time_to_teleport = BOSS_TELEPORT_TIME;
-  boss->life_count = BOSS_LIFE_COUNT_TOTAL;
+  boss->lives = BOSS_LIFE_COUNT_TOTAL;
   DrawCircle((int)boss->center.x, (int)boss->center.y, boss->radius, PURPLE);
 }
 void update_boss (BossType* boss) {
@@ -332,7 +341,7 @@ void update_driver(DriverType* driver) {
   DrawTriangle(driver->v1, driver->v2, driver->v3, RED);
 }
 
-Vector2 get_vector_from_pivot (Vector2 pivot, int degrees, float radius ) {
+Vector2 get_vector_from_pivot (Vector2 pivot, float degrees, float radius ) {
   float cosx = (float)cos(degrees * (PI/180));
   float siny = (float)sin(degrees * (PI/180));
   return (Vector2){pivot.x + (radius * cosx), pivot.y + (radius * siny)};
