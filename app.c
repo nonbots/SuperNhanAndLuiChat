@@ -11,10 +11,10 @@
 #define SPAWN_BOOSTER_COUNTER 600
 #define BOSS_LIFE_COUNT_TOTAL 10
 //asteroids 
-#define MIN_SPEED 1
-#define MAX_SPEED 10
-#define MIN_RADIUS 5 
-#define MAX_RADIUS 10
+#define ASTEROID_MIN_SPEED 1
+#define ASTEROID_MAX_SPEED 5
+#define ASTEROID_MIN_RADIUS 15 
+#define ASTEROID_MAX_RADIUS 30
 #define MIN_X_POSITION 0
 //laser
 #define LASER_SPEED 10
@@ -29,6 +29,11 @@ typedef enum {
   SHOOT
 } LaserStateType;
 
+typedef enum {
+  LOST,
+  WIN
+} GameStateType;
+//
 //asteroid struct
 typedef struct {
   float radius;
@@ -98,6 +103,7 @@ void respawn_boss(BossType* boss);
 void respawn_driver_laser(LaserType* driver_laser, DriverType* driver);
 void shoot_driver_laser(LaserType* driver_laser, float rotation);
 void update_boss(BossType* boss);
+void render_screen( const char *text, bool isExit, DriverType* driver, BossType* boss );
 
 
 int main(void) {
@@ -113,7 +119,6 @@ int main(void) {
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
   int spawn_booster_counter = 400; 
-  int collisionCount = 0;
   bool isExit = false;
   LaserType* driver_laser = &game_entity.driver_laser;
   BossType* boss = &game_entity.boss;
@@ -130,12 +135,6 @@ int main(void) {
   {
     BeginDrawing();
     ClearBackground(BLACK);
-    DrawText(TextFormat("Ship Lives:%d", driver->lives), 20, 20, 10, PURPLE);
-    DrawText(TextFormat("Boss Lives:%d", boss->lives), 90, 20, 10, PURPLE);
-    DrawText(TextFormat("Boss Teleport Time:%d", boss->time_to_teleport), 20, 30, 10, PURPLE);
-    DrawText(TextFormat("Booster Spawn Time %d", spawn_booster_counter), 20, 40, 10, PURPLE);
-    DrawText(TextFormat("Ship Speed %f", driver->speed), 20, 50, 10, PURPLE);
-    DrawText(TextFormat("Ship Rotation Speed %f", driver->rotation_speed), 20, 60, 10, PURPLE);
     switch (driver->state) {
 
       case ALIVE : 
@@ -148,6 +147,7 @@ int main(void) {
           spawn_booster_counter = SPAWN_BOOSTER_COUNTER;
         }
         update_booster(booster);
+
         //for loop through astroids 
         bool is_collision_driver_v1 = CheckCollisionPointCircle(driver->v1, booster->center, booster->radius);
         bool is_collision_driver_v2 = CheckCollisionPointCircle(driver->v2, booster->center, booster->radius);
@@ -164,7 +164,6 @@ int main(void) {
 
           if (is_collision_v1 || is_collision_v2 || is_collision_v3){
             PlaySound(explosion);
-            collisionCount += 1; 
             driver->lives -= 1;
             respawn_asteroids(&asteroids[i]);
           };
@@ -191,6 +190,17 @@ int main(void) {
           };
           if (boss->lives == 0) boss->state = DEAD;
         }
+        if (boss->state == DEAD) {
+          render_screen("VICTORY!", isExit, driver, boss);
+        }
+
+        DrawText(TextFormat("%d", driver->lives), driver->center.x - 4, driver->center.y - 7, 14, WHITE);
+        DrawText(TextFormat("%d", boss->lives), boss->center.x - 10, boss->center.y - 10, 20, WHITE);
+        DrawText(TextFormat("%d", boss->time_to_teleport), boss->center.x - 7, boss->center.y + 10, 14, WHITE);
+        DrawText(TextFormat("Booster Spawn Time %d", spawn_booster_counter), 20, 40, 10, PURPLE);
+        DrawText(TextFormat("Ship Speed %f", driver->speed), 20, 50, 10, PURPLE);
+        DrawText(TextFormat("Ship Rotation Speed %f", driver->rotation_speed), 20, 60, 10, PURPLE);
+
         if (driver_laser->state == SPAWN) {
           respawn_driver_laser(&game_entity.driver_laser, &game_entity.driver);
           if (IsKeyPressed(KEY_SPACE)) {
@@ -211,30 +221,31 @@ int main(void) {
         break;
 
       case DEAD:
-        DrawText(TextFormat("GAME OVER"), 100, SCREEN_HEIGHT/2, 50, ORANGE);
-        DrawText(TextFormat("Press [R] to Restart"), 100, (SCREEN_HEIGHT/2) + 50, 20, ORANGE);
-        DrawText(TextFormat("Press [E] to Exit"), 100, (SCREEN_HEIGHT/2) + 100, 20, ORANGE);
-        if (IsKeyPressed(KEY_E)) isExit = true; 
-        if (IsKeyPressed(KEY_R)) {
-          driver->state = ALIVE;
-          driver->speed = 1;
-          driver->rotation_speed = 1; 
-          collisionCount = 0;
-          driver->lives = 3;
-          boss->lives = ALIVE;
-          boss->lives = BOSS_LIFE_COUNT_TOTAL;
-          boss->state = ALIVE;
-        }
+        render_screen("GAME OVER", isExit, driver, boss);
         break;
     }
     EndDrawing();
   }
-
   CloseWindow();        // Close window and OpenGL context
   CloseAudioDevice();
   return 0;
 }
 
+void render_screen( const char *text, bool isExit, DriverType* driver, BossType* boss ) {
+  DrawText(TextFormat(text), 100, SCREEN_HEIGHT/2, 50, ORANGE);
+  DrawText(TextFormat("Press [R] to Restart"), 100, (SCREEN_HEIGHT/2) + 50, 20, ORANGE);
+  DrawText(TextFormat("Press [E] to Exit"), 100, (SCREEN_HEIGHT/2) + 100, 20, ORANGE);
+  if (IsKeyPressed(KEY_E)) isExit = true; 
+  if (IsKeyPressed(KEY_R)) {
+    driver->state = ALIVE;
+    driver->speed = 1;
+    driver->rotation_speed = 1; 
+    driver->lives = 3;
+    boss->lives = ALIVE;
+    boss->lives = BOSS_LIFE_COUNT_TOTAL;
+    boss->state = ALIVE;
+  }
+}
 void init_booster(BoosterType* booster) {
   booster->speed = 1;
   booster->radius = 10;
@@ -277,7 +288,7 @@ void init_driver(DriverType* driver) {
   driver->state = ALIVE; 
   driver->lives = 3;
   driver->center = (Vector2){SCREEN_WIDTH/2 , SCREEN_HEIGHT/2};
-  driver->radius = 10;
+  driver->radius = 12;
   driver->speed = 1;
   driver->rotation_speed = 1;
   driver->rotation_v1 = 270;
@@ -349,10 +360,10 @@ Vector2 get_vector_from_pivot (Vector2 pivot, float degrees, float radius ) {
 void init_asteroids(AsteroidType* asteroids) {
   //loop through asteroids to init each asteroid
   for (int i = 0; i < ASTEROIDS_LENGTH; i++) {
-    asteroids[i].radius = (float)GetRandomValue(MIN_RADIUS, MAX_RADIUS);
+    asteroids[i].radius = (float)GetRandomValue(ASTEROID_MIN_RADIUS, ASTEROID_MAX_RADIUS);
     asteroids[i].center.x = (float)GetRandomValue(MIN_X_POSITION, SCREEN_WIDTH);
     asteroids[i].center.y = 0;
-    asteroids[i].speed = (float)GetRandomValue(MIN_SPEED, MAX_SPEED);
+    asteroids[i].speed = (float)GetRandomValue(ASTEROID_MIN_SPEED, ASTEROID_MAX_SPEED);
   }
 }
 void update_asteroids(AsteroidType* asteroids) {
@@ -368,6 +379,6 @@ void update_asteroids(AsteroidType* asteroids) {
 void respawn_asteroids(AsteroidType* asteroid) {
   asteroid->center.x = (float)GetRandomValue(MIN_X_POSITION, SCREEN_WIDTH);
   asteroid->center.y = 0 - 20;
-  asteroid->radius = (float)GetRandomValue(MIN_RADIUS, MAX_RADIUS);
-  asteroid->speed = (float)GetRandomValue(MIN_SPEED, MAX_SPEED);
+  asteroid->radius = (float)GetRandomValue(ASTEROID_MIN_RADIUS, ASTEROID_MAX_RADIUS);
+  asteroid->speed = (float)GetRandomValue(ASTEROID_MIN_SPEED, ASTEROID_MAX_SPEED);
 }
