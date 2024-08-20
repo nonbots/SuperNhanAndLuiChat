@@ -103,8 +103,9 @@ void respawn_boss(BossType* boss);
 void respawn_driver_laser(LaserType* driver_laser, DriverType* driver);
 void shoot_driver_laser(LaserType* driver_laser, float rotation);
 void update_boss(BossType* boss);
-void render_screen( const char *text, bool isExit, DriverType* driver, BossType* boss );
+void render_screen( const char *text, DriverType* driver, BossType* boss );
 
+bool isExit = false;
 
 int main(void) {
   InitAudioDevice();
@@ -119,7 +120,6 @@ int main(void) {
   SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
 
   int spawn_booster_counter = 400; 
-  bool isExit = false;
   LaserType* driver_laser = &game_entity.driver_laser;
   BossType* boss = &game_entity.boss;
   DriverType* driver = &game_entity.driver;
@@ -135,9 +135,8 @@ int main(void) {
   {
     BeginDrawing();
     ClearBackground(BLACK);
-    switch (driver->state) {
+    if (driver->state == ALIVE && boss->state == ALIVE) {
 
-      case ALIVE : 
         spawn_booster_counter -= 1;
         update_asteroids(asteroids);
         update_driver(driver);
@@ -190,9 +189,6 @@ int main(void) {
           };
           if (boss->lives == 0) boss->state = DEAD;
         }
-        if (boss->state == DEAD) {
-          render_screen("VICTORY!", isExit, driver, boss);
-        }
 
         DrawText(TextFormat("%d", driver->lives), driver->center.x - 4, driver->center.y - 7, 14, WHITE);
         DrawText(TextFormat("%d", boss->lives), boss->center.x - 10, boss->center.y - 10, 20, WHITE);
@@ -218,11 +214,13 @@ int main(void) {
            bool overRight = driver_laser->end_position.x >= SCREEN_WIDTH;
            if (overTop || overBottom || overLeft || overRight) driver_laser->state = SPAWN;
         }
-        break;
-
-      case DEAD:
-        render_screen("GAME OVER", isExit, driver, boss);
-        break;
+      } else {
+        if (boss->state == ALIVE && driver->state == DEAD) {
+          render_screen("GAME OVER",  driver, boss);
+        }
+        if (boss->state == DEAD && driver->state == ALIVE) {
+          render_screen("VICTORY!", driver, boss);
+        }
     }
     EndDrawing();
   }
@@ -231,7 +229,7 @@ int main(void) {
   return 0;
 }
 
-void render_screen( const char *text, bool isExit, DriverType* driver, BossType* boss ) {
+void render_screen( const char *text, DriverType* driver, BossType* boss ) {
   DrawText(TextFormat(text), 100, SCREEN_HEIGHT/2, 50, ORANGE);
   DrawText(TextFormat("Press [R] to Restart"), 100, (SCREEN_HEIGHT/2) + 50, 20, ORANGE);
   DrawText(TextFormat("Press [E] to Exit"), 100, (SCREEN_HEIGHT/2) + 100, 20, ORANGE);
